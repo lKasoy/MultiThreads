@@ -51,19 +51,20 @@ class NumbersFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         binding.list.adapter = numbersAdapter
 
-//        startThread()
+        startThread()
 //        startCoroutineScope()
-        startRx()
+//        startRx()
     }
 
     private fun startCoroutineScope() {
         val f = flow {
-            for (i in 1 until 10) {
+            for (i in 0 until 10) {
                 val number = Random.nextInt(20)
-                delay(Random.nextLong(2000))
+                delay(1000)
                 this.emit(number)
             }
-        }.flowOn(Dispatchers.Main)
+        }.flowOn(Dispatchers.IO)
+
         lifecycleScope.launch {
             f.collect {
                 numbersAdapter.submitList(numbersAdapter.currentList + it)
@@ -78,9 +79,9 @@ class NumbersFragment : Fragment() {
             }
         })
         thread = Thread {
-            for (i in 1 until 10) {
+            for (i in 0 until 10) {
                 val number = Random.nextInt(20)
-                sleep(Random.nextLong(2000))
+                sleep(1000)
                 randomNumber.postValue(number)
             }
         }
@@ -88,7 +89,7 @@ class NumbersFragment : Fragment() {
     }
 
     private fun startRx() {
-        val disposable = Observable.interval(Random.nextLong(2000), TimeUnit.MILLISECONDS)
+        val disposable = Observable.interval(1000, TimeUnit.MILLISECONDS)
             .take(10)
             .subscribeOn(Schedulers.io())
             .map {
@@ -96,7 +97,7 @@ class NumbersFragment : Fragment() {
             }
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe({
-                    numbersAdapter.submitList(numbersAdapter.currentList + it)
+                numbersAdapter.submitList(numbersAdapter.currentList + it)
             }, {
                 Log.d("test", "$it")
             })
