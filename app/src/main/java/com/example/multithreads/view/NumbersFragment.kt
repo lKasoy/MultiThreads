@@ -3,6 +3,7 @@ package com.example.multithreads.view
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.os.SystemClock.sleep
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -12,21 +13,22 @@ import androidx.lifecycle.lifecycleScope
 import com.example.multithreads.R
 import com.example.multithreads.databinding.FragmentItemListBinding
 import com.example.multithreads.services.NumbersAdapter
-import io.reactivex.Observable.interval
+import io.reactivex.Flowable
+import io.reactivex.android.schedulers.AndroidSchedulers
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
-
+import kotlin.random.Random
 
 class NumbersFragment : Fragment() {
 
     private lateinit var binding: FragmentItemListBinding
     private var numbersAdapter = NumbersAdapter()
     private val randomNumber = MutableLiveData<Int>()
-    private var currentList = mutableListOf<Int>()
-    private val stateFlow = MutableStateFlow(0)
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -52,51 +54,46 @@ class NumbersFragment : Fragment() {
     }
 
     private fun startCoroutineScope() {
-        lifecycleScope.launch {
-            for (i in 1..10) {
-                val number = (1..10).random()
-                delay(1000)
-                stateFlow.value = number
+        val f = flow {
+            for (i in 1 until 10) {
+                val number = Random.nextInt(20)
+                delay(Random.nextLong(2000))
+                this.emit(number)
             }
-        }
-
+        }.flowOn(Dispatchers.Main)
         lifecycleScope.launch {
-            stateFlow.collect {
-                numbersAdapter.submitList(currentList + it)
-                currentList.add(it)
+            f.collect {
+                numbersAdapter.submitList(numbersAdapter.currentList + it)
             }
         }
     }
 
     private fun startThread() {
+        randomNumber.observe(viewLifecycleOwner, {
+            it.let {
+                numbersAdapter.submitList(numbersAdapter.currentList + it)
+            }
+        })
         Thread {
-            for (i in 1..10) {
-                val number = (1..10).random()
-                sleep(1000)
+            for (i in 1 until 10) {
+                val number = Random.nextInt(20)
+                sleep(Random.nextLong(2000))
                 randomNumber.postValue(number)
             }
         }.start()
-
-        randomNumber.observe(viewLifecycleOwner, {
-            it.let {
-                numbersAdapter.submitList(currentList + it)
-                currentList.add(it)
-            }
-        })
     }
 
     @SuppressLint("CheckResult")
     private fun startRx() {
-        numbersAdapter.submitList(currentList)
-
-        interval(1000, TimeUnit.MILLISECONDS)
-            .timeInterval()
-            .subscribe {
-                if (it.value() < 10) {
-                    val number = (1..10).random()
-                    numbersAdapter.submitList(currentList + number)
-                    currentList.add(number)
+        Flowable.interval(Random.nextLong(2000), TimeUnit.MILLISECONDS)
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({
+                if (it <= 10) {
+                    val number = Random.nextInt(20)
+                    numbersAdapter.submitList(numbersAdapter.currentList + number)
                 }
-            }
+            }, {
+                Log.d("test", "$it")
+            })
     }
 }
