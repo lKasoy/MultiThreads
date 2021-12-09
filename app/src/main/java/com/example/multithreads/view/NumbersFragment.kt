@@ -1,6 +1,5 @@
 package com.example.multithreads.view
 
-import android.annotation.SuppressLint
 import android.os.Bundle
 import android.os.SystemClock.sleep
 import android.util.Log
@@ -13,8 +12,10 @@ import androidx.lifecycle.lifecycleScope
 import com.example.multithreads.R
 import com.example.multithreads.databinding.FragmentItemListBinding
 import com.example.multithreads.services.NumbersAdapter
-import io.reactivex.Flowable
+import io.reactivex.Observable
 import io.reactivex.android.schedulers.AndroidSchedulers
+import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.schedulers.Schedulers
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
@@ -29,6 +30,8 @@ class NumbersFragment : Fragment() {
     private lateinit var binding: FragmentItemListBinding
     private var numbersAdapter = NumbersAdapter()
     private val randomNumber = MutableLiveData<Int>()
+    private val disposables = CompositeDisposable()
+    private var thread: Thread? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -74,26 +77,35 @@ class NumbersFragment : Fragment() {
                 numbersAdapter.submitList(numbersAdapter.currentList + it)
             }
         })
-        Thread {
+        thread = Thread {
             for (i in 1 until 10) {
                 val number = Random.nextInt(20)
                 sleep(Random.nextLong(2000))
                 randomNumber.postValue(number)
             }
-        }.start()
+        }
+        thread?.start()
     }
 
-    @SuppressLint("CheckResult")
     private fun startRx() {
-        Flowable.interval(Random.nextLong(2000), TimeUnit.MILLISECONDS)
+        val disposable = Observable.interval(Random.nextLong(2000), TimeUnit.MILLISECONDS)
+            .take(10)
+            .subscribeOn(Schedulers.io())
+            .map {
+                Random.nextInt(20)
+            }
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe({
-                if (it <= 10) {
-                    val number = Random.nextInt(20)
-                    numbersAdapter.submitList(numbersAdapter.currentList + number)
-                }
+                    numbersAdapter.submitList(numbersAdapter.currentList + it)
             }, {
                 Log.d("test", "$it")
             })
+        disposables.add(disposable)
+    }
+
+    override fun onStop() {
+        disposables.dispose()
+        thread?.interrupt()
+        super.onStop()
     }
 }
